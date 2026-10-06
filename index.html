@@ -1,0 +1,1358 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>教室用電子沙漏計時器</title>
+  <style>
+    :root {
+      --bg-color: #0f172a;
+      --panel-bg: rgba(30, 41, 59, 0.75);
+      --panel-border: rgba(255, 255, 255, 0.1);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --sand-color: #f59e0b;
+      --sand-glow: rgba(245, 158, 11, 0.4);
+      --accent-color: #3b82f6;
+      --accent-hover: #2563eb;
+      --danger-color: #ef4444;
+      --success-color: #10b981;
+      --glass-stroke: rgba(255, 255, 255, 0.35);
+      --alert-border: #f43f5e;
+      --ui-radius: 12px;
+      --transition-standard: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang TC", "Microsoft JhengHei", sans-serif;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
+    #app-container {
+      flex: 1;
+      display: flex;
+      flex-direction: row;
+      height: 100vh;
+      height: 100dvh;
+      position: relative;
+      padding: 16px;
+      gap: 20px;
+      z-index: 10;
+      overflow: hidden;
+    }
+
+    /* 左側：設定與操作面板 */
+    #control-sidebar {
+      width: 360px;
+      max-width: 40%;
+      min-width: 300px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-border);
+      border-radius: var(--ui-radius);
+      padding: 20px;
+      overflow-y: auto;
+      transition: opacity var(--transition-standard), transform var(--transition-standard);
+      flex-shrink: 0;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    .app-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--panel-border);
+    }
+
+    .section-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .section-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+    }
+
+    /* 模式切換器 (倒數 / 正數) */
+    .segmented-control {
+      display: flex;
+      background: rgba(15, 23, 42, 0.6);
+      padding: 4px;
+      border-radius: 8px;
+      border: 1px solid var(--panel-border);
+    }
+
+    .segmented-btn {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 8px 10px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all var(--transition-standard);
+      text-align: center;
+    }
+
+    .segmented-btn.active {
+      background: var(--accent-color);
+      color: #ffffff;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    /* 快捷時間網格 */
+    .quick-presets {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .quick-presets button:last-child:nth-child(odd) {
+      grid-column: span 2;
+    }
+
+    .preset-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--text-main);
+      padding: 9px 12px;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition-standard);
+      text-align: center;
+    }
+
+    .preset-btn:hover {
+      background: rgba(255, 255, 255, 0.18);
+      transform: translateY(-1px);
+    }
+
+    .preset-btn:active {
+      transform: translateY(0);
+    }
+
+    /* 自訂分秒輸入列 */
+    .custom-time-inputs {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 8px 12px;
+    }
+
+    .input-pair {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .time-input-group {
+      display: flex;
+      align-items: center;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid var(--panel-border);
+      border-radius: 6px;
+      padding: 4px 6px;
+    }
+
+    .time-input-group input {
+      background: transparent;
+      border: none;
+      color: var(--text-main);
+      font-size: 1.15rem;
+      font-weight: 700;
+      width: 44px;
+      text-align: center;
+      outline: none;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .time-input-group span {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-left: 2px;
+    }
+
+    /* 主按鈕動作列 */
+    .action-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .btn {
+      border: none;
+      outline: none;
+      padding: 12px 18px;
+      border-radius: 10px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all var(--transition-standard);
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+    }
+
+    .btn:hover {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+      filter: none;
+    }
+
+    .btn-primary {
+      background: var(--sand-color);
+      color: #0f172a;
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.12);
+      color: var(--text-main);
+    }
+
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+    }
+
+    .action-sub-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .action-sub-row .btn {
+      flex: 1;
+      padding: 10px;
+      font-size: 0.95rem;
+    }
+
+    /* 工具與輔助選項列表 */
+    .sidebar-tools {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: auto;
+      padding-top: 14px;
+      border-top: 1px solid var(--panel-border);
+    }
+
+    .icon-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--panel-border);
+      color: var(--text-main);
+      padding: 9px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: all var(--transition-standard);
+      width: 100%;
+    }
+
+    .icon-btn:hover {
+      background: rgba(255, 255, 255, 0.16);
+    }
+
+    /* 右側：大型沙漏與時間標示展示區 */
+    #stage-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      min-height: 0;
+      height: 100%;
+    }
+
+    .visual-stage {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      width: 100%;
+      position: relative;
+      gap: 16px;
+    }
+
+    .hourglass-wrapper {
+      position: relative;
+      width: min(52vh, 460px);
+      height: min(65vh, 560px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      filter: drop-shadow(0 18px 30px rgba(0, 0, 0, 0.55));
+    }
+
+    .hourglass-svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    /* 沙漏本體玻璃反射與沙子質感 */
+    .glass-contour {
+      stroke: var(--glass-stroke);
+      stroke-width: 5;
+      fill: rgba(255, 255, 255, 0.03);
+    }
+
+    .sand-element {
+      fill: var(--sand-color);
+      filter: drop-shadow(0 0 6px var(--sand-glow));
+      transition: fill 0.3s ease;
+    }
+
+    /* 沙流光斑動畫 */
+    @keyframes sandDrop {
+      0% {
+        stroke-dashoffset: 0;
+        opacity: 0.6;
+      }
+      50% {
+        opacity: 1;
+      }
+      100% {
+        stroke-dashoffset: 40;
+        opacity: 0.7;
+      }
+    }
+
+    .sand-stream-active {
+      stroke: var(--sand-color);
+      stroke-width: 4;
+      stroke-linecap: round;
+      stroke-dasharray: 6 4;
+      animation: sandDrop 0.4s linear infinite;
+      filter: drop-shadow(0 0 5px var(--sand-glow));
+    }
+
+    /* 右側大螢幕倒數數字時間標示 */
+    .timer-display {
+      font-size: clamp(3.6rem, 8.5vw, 7.5rem);
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 2px;
+      color: var(--text-main);
+      text-shadow: 0 4px 20px rgba(0, 0, 0, 0.7);
+      transition: opacity var(--transition-standard), transform var(--transition-standard);
+      line-height: 1;
+    }
+
+    .timer-display.hidden-time {
+      visibility: hidden;
+      opacity: 0;
+      pointer-events: none;
+      height: 0;
+      margin: 0;
+    }
+
+    /* 設定彈窗 */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal-card {
+      background: #1e293b;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 16px;
+      max-width: 440px;
+      width: 100%;
+      padding: 24px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+
+    .modal-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+
+    .setting-item {
+      margin-bottom: 16px;
+    }
+
+    .setting-label {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .radio-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .radio-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      padding: 8px 12px;
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 8px;
+      border: 1px solid transparent;
+      transition: all var(--transition-standard);
+    }
+
+    .radio-label:hover {
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .radio-label input[type="radio"] {
+      accent-color: var(--sand-color);
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+
+    /* 四周線條閃爍提醒 (完全靜音) */
+    #screen-border-alert {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 999;
+      opacity: 0;
+      border: 16px solid var(--alert-border);
+      box-shadow: inset 0 0 50px rgba(244, 63, 94, 0.55), 0 0 40px rgba(244, 63, 94, 0.6);
+      transition: opacity 0.3s ease;
+    }
+
+    @keyframes perimeterPulse {
+      0%, 100% {
+        opacity: 0.05;
+        border-color: rgba(244, 63, 94, 0.2);
+      }
+      50% {
+        opacity: 1;
+        border-color: rgba(244, 63, 94, 1);
+        box-shadow: inset 0 0 70px rgba(244, 63, 94, 0.7), 0 0 60px rgba(244, 63, 94, 0.8);
+      }
+    }
+
+    #screen-border-alert.flashing {
+      animation: perimeterPulse 1.4s ease-in-out infinite;
+    }
+
+    /* 完成狀態浮動確定按鈕 */
+    #finish-overlay-btn {
+      position: fixed;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      display: none;
+      padding: 14px 36px;
+      background: var(--alert-border);
+      color: #ffffff;
+      border: none;
+      border-radius: 50px;
+      font-size: 1.25rem;
+      font-weight: 800;
+      box-shadow: 0 10px 25px rgba(244, 63, 94, 0.5);
+      cursor: pointer;
+      animation: bounce 1.8s infinite;
+    }
+
+    @keyframes bounce {
+      0%, 20%, 50%, 80%, 100% { transform: translate(-50%, 0); }
+      40% { transform: translate(-50%, -10px); }
+      60% { transform: translate(-50%, -5px); }
+    }
+
+    /* 全螢幕投影沉浸模式 */
+    body.immersive-mode #control-sidebar {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(-30px);
+    }
+
+    #fullscreen-exit-hint {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      background: rgba(15, 23, 42, 0.85);
+      color: var(--text-muted);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      z-index: 200;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+
+    body.immersive-mode:hover #fullscreen-exit-hint,
+    body.show-controls #fullscreen-exit-hint {
+      opacity: 1;
+    }
+
+    body.show-controls #control-sidebar {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateX(0);
+    }
+
+    /* 手機與直向螢幕自適應 */
+    @media (max-width: 860px) {
+      #app-container {
+        flex-direction: column-reverse;
+        padding: 12px;
+        gap: 12px;
+        overflow-y: auto;
+      }
+      #control-sidebar {
+        width: 100%;
+        max-width: 100%;
+        min-width: unset;
+        box-shadow: none;
+      }
+      .quick-presets {
+        grid-template-columns: repeat(3, 1fr);
+      }
+      .quick-presets button:last-child:nth-child(odd) {
+        grid-column: span 1;
+      }
+      .hourglass-wrapper {
+        width: min(38vh, 260px);
+        height: min(45vh, 340px);
+      }
+      body.immersive-mode #control-sidebar {
+        transform: translateY(30px);
+      }
+      body.show-controls #control-sidebar {
+        transform: translateY(0);
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- 靜音邊框閃爍提醒器 -->
+  <div id="screen-border-alert"></div>
+  <button id="finish-overlay-btn" type="button">✔ 時間到（點此關閉提醒）</button>
+  <div id="fullscreen-exit-hint">移動滑鼠或觸控以顯示控制器，按 ESC 退出全螢幕</div>
+
+  <div id="app-container">
+    <!-- 左側面板：時間設定、快速按鈕與控制選項 -->
+    <aside id="control-sidebar">
+      <div class="app-title">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M5 22h14M5 2h14M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/>
+        </svg>
+        <span>教室電子沙漏</span>
+      </div>
+
+      <!-- 模式切換器 -->
+      <div class="section-group">
+        <span class="section-title">計時模式</span>
+        <div class="segmented-control" role="group" aria-label="計時模式切換">
+          <button type="button" class="segmented-btn active" id="btn-mode-countdown">倒數沙漏</button>
+          <button type="button" class="segmented-btn" id="btn-mode-countup">正數計時</button>
+        </div>
+      </div>
+
+      <!-- 快速預設時間按鈕 -->
+      <div class="section-group">
+        <span class="section-title">快速選擇</span>
+        <div class="quick-presets">
+          <button type="button" class="preset-btn" data-sec="30">30 秒</button>
+          <button type="button" class="preset-btn" data-sec="60">1 分鐘</button>
+          <button type="button" class="preset-btn" data-sec="180">3 分鐘</button>
+          <button type="button" class="preset-btn" data-sec="300">5 分鐘</button>
+          <button type="button" class="preset-btn" data-sec="600">10 分鐘</button>
+        </div>
+      </div>
+
+      <!-- 自訂分秒輸入 -->
+      <div class="section-group">
+        <span class="section-title">自訂時間設定</span>
+        <div class="custom-time-inputs">
+          <span style="font-size:0.9rem; font-weight:600;">時間長度：</span>
+          <div class="input-pair">
+            <div class="time-input-group">
+              <input type="number" id="input-minutes" min="0" max="99" value="3" aria-label="分鐘">
+              <span>分</span>
+            </div>
+            <div class="time-input-group">
+              <input type="number" id="input-seconds" min="0" max="59" value="0" aria-label="秒數">
+              <span>秒</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 主控制動作按鈕 -->
+      <div class="action-controls">
+        <button type="button" class="btn btn-primary" id="btn-start">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg>
+          <span id="btn-start-label">開始計時</span>
+        </button>
+        <div class="action-sub-row">
+          <button type="button" class="btn btn-secondary" id="btn-restart" title="重新由頭開始">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M1 4v6h6M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+            </svg>
+            <span>重新開始</span>
+          </button>
+          <button type="button" class="btn btn-danger" id="btn-reset" title="回到設定值">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+            <span>重設</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 工具選單與全螢幕輔助列 -->
+      <div class="sidebar-tools">
+        <!-- 切換顯示/隱藏數字 -->
+        <button type="button" class="icon-btn" id="btn-toggle-time" title="切換顯示或隱藏數字時間">
+          <svg id="icon-time-visible" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+          </svg>
+          <span id="text-time-toggle">數字：顯示</span>
+        </button>
+
+        <!-- 設定提醒模式按鈕 -->
+        <button type="button" class="icon-btn" id="btn-open-settings" title="設定提醒方式">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          <span>提醒設定</span>
+        </button>
+
+        <!-- 全螢幕按鈕 -->
+        <button type="button" class="icon-btn" id="btn-fullscreen" title="全螢幕投影模式">
+          <svg id="icon-fullscreen-enter" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+          </svg>
+          <span id="text-fullscreen">全螢幕投影</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- 右側：沙漏與倒數/計時時間標示 -->
+    <main id="stage-area">
+      <div class="visual-stage">
+        <div class="hourglass-wrapper">
+          <svg class="hourglass-svg" viewBox="0 0 300 480" preserveAspectRatio="xMidYMid meet">
+            <defs>
+              <!-- 上半腔室裁切路徑 -->
+              <clipPath id="top-chamber-clip">
+                <path d="M 52,65 C 52,65 52,190 144,236 C 147,237.5 153,237.5 156,236 C 248,190 248,65 248,65 Z" />
+              </clipPath>
+
+              <!-- 下半腔室裁切路徑 -->
+              <clipPath id="bottom-chamber-clip">
+                <path d="M 144,244 C 147,242.5 153,242.5 156,244 C 248,290 248,415 248,415 L 52,415 C 52,415 52,290 144,244 Z" />
+              </clipPath>
+
+              <!-- 沙子材質微妙漸層 -->
+              <linearGradient id="sand-gradient-top" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#fbbf24" />
+                <stop offset="100%" stop-color="#d97706" />
+              </linearGradient>
+              <linearGradient id="sand-gradient-bottom" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#f59e0b" />
+                <stop offset="100%" stop-color="#b45309" />
+              </linearGradient>
+
+              <!-- 玻璃反光質感 -->
+              <linearGradient id="glass-reflection" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="rgba(255,255,255,0.4)" />
+                <stop offset="15%" stop-color="rgba(255,255,255,0.05)" />
+                <stop offset="85%" stop-color="rgba(255,255,255,0.02)" />
+                <stop offset="100%" stop-color="rgba(255,255,255,0.25)" />
+              </linearGradient>
+            </defs>
+
+            <!-- 沙漏支架底座與頂座 -->
+            <rect x="30" y="45" width="240" height="16" rx="8" fill="#334155" stroke="#475569" stroke-width="2" />
+            <rect x="30" y="419" width="240" height="16" rx="8" fill="#334155" stroke="#475569" stroke-width="2" />
+
+            <!-- 支架立柱 -->
+            <rect x="36" y="61" width="8" height="358" rx="4" fill="#1e293b" stroke="#334155" stroke-width="1.5" />
+            <rect x="256" y="61" width="8" height="358" rx="4" fill="#1e293b" stroke="#334155" stroke-width="1.5" />
+
+            <!-- 玻璃內部背景底色 -->
+            <path d="M 52,65 C 52,65 52,190 144,236 C 148,238 152,238 156,236 C 248,190 248,65 248,65 Z" fill="rgba(15, 23, 42, 0.4)" />
+            <path d="M 144,244 C 148,242 152,242 156,244 C 248,290 248,415 248,415 L 52,415 C 52,415 52,290 144,244 Z" fill="rgba(15, 23, 42, 0.4)" />
+
+            <!-- 上半部動態沙堆 (裁切於上半腔室) -->
+            <g clip-path="url(#top-chamber-clip)">
+              <rect id="top-sand-rect" x="40" y="65" width="220" height="175" fill="url(#sand-gradient-top)" />
+            </g>
+
+            <!-- 下半部動態沙堆 (裁切於下半腔室) -->
+            <g clip-path="url(#bottom-chamber-clip)">
+              <rect id="bottom-sand-rect" x="40" y="415" width="220" height="0" fill="url(#sand-gradient-bottom)" />
+              <polygon id="sand-mound-tip" points="150,415 150,415 150,415" fill="#fbbf24" opacity="0.9" />
+            </g>
+
+            <!-- 中央流下之細沙線 (計時中顯現) -->
+            <line id="sand-stream" x1="150" y1="236" x2="150" y2="415" stroke-width="3" style="display: none;" />
+
+            <!-- 沙漏玻璃輪廓與反光覆蓋 -->
+            <path d="M 52,65 C 52,65 52,190 144,236 C 148,238 152,238 156,236 C 248,190 248,65 248,65 Z"
+                  class="glass-contour" fill="url(#glass-reflection)" />
+            <path d="M 144,244 C 148,242 152,242 156,244 C 248,290 248,415 248,415 L 52,415 C 52,415 52,290 144,244 Z"
+                  class="glass-contour" fill="url(#glass-reflection)" />
+          </svg>
+        </div>
+
+        <!-- 倒數 / 計時時間標示 -->
+        <div id="main-timer-text" class="timer-display" aria-live="polite">03:00</div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 提醒方式設定 Modal 彈窗 -->
+  <div class="modal-backdrop" id="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title" id="settings-title">計時提醒設定</h2>
+        <button type="button" class="icon-btn" id="btn-close-settings" aria-label="關閉設定" style="width:auto; padding:6px 12px;">✕</button>
+      </div>
+
+      <div class="setting-item">
+        <span class="setting-label">時間到達時的閃爍提醒方式（全程靜音）：</span>
+        <div class="radio-group">
+          <label class="radio-label">
+            <input type="radio" name="alert-duration-mode" value="auto-5" id="opt-mode-a">
+            <span>A. 邊框閃爍 5 秒後自動停止</span>
+          </label>
+          <label class="radio-label">
+            <input type="radio" name="alert-duration-mode" value="until-click" id="opt-mode-b" checked>
+            <span>B. 持續閃爍，直到老師點擊「完成」（建議）</span>
+          </label>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
+        <button type="button" class="btn btn-primary" id="btn-save-settings">確定</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ============================================================
+       教室用電子沙漏計時器 - 核心腳本 (準確無音效高辨識度架構)
+       ============================================================ */
+
+    // 狀態定義
+    const TimerState = {
+      IDLE: 'IDLE',         // 閒置/重設狀態
+      RUNNING: 'RUNNING',   // 計時中
+      PAUSED: 'PAUSED',     // 暫停中
+      FINISHED: 'FINISHED'  // 時間到達，提醒閃爍中
+    };
+
+    const TimerMode = {
+      COUNTDOWN: 'COUNTDOWN', // 倒數模式 (預設)
+      COUNTUP: 'COUNTUP'      // 正數計時模式
+    };
+
+    // 儲存鍵名
+    const STORAGE_KEY = 'classroom_hourglass_config_v1';
+
+    // 應用狀態
+    const app = {
+      state: TimerState.IDLE,
+      mode: TimerMode.COUNTDOWN,
+      showTimeNumber: true,
+      alertMode: 'until-click', // 'auto-5' 或 'until-click'
+      
+      // 時間數值（以毫秒 ms 為基準，精準度高）
+      targetDurationMs: 180 * 1000, // 預設 3 分鐘
+      elapsedMs: 0,
+      
+      // 高精準定時核心變數
+      startTime: 0,
+      lastTimestamp: 0,
+      rafId: null,
+      autoStopAlertTimeoutId: null,
+
+      // 全螢幕沉浸控制
+      isImmersive: false,
+      hideControlsTimer: null
+    };
+
+    // DOM 元素引用
+    const elBorderAlert = document.getElementById('screen-border-alert');
+    const elFinishBtn = document.getElementById('finish-overlay-btn');
+    const elTimerDisplay = document.getElementById('main-timer-text');
+    const elControlSidebar = document.getElementById('control-sidebar');
+    
+    // 沙漏 SVG 元件
+    const elTopSand = document.getElementById('top-sand-rect');
+    const elBottomSand = document.getElementById('bottom-sand-rect');
+    const elSandMoundTip = document.getElementById('sand-mound-tip');
+    const elSandStream = document.getElementById('sand-stream');
+
+    // 控制項
+    const btnStart = document.getElementById('btn-start');
+    const btnStartLabel = document.getElementById('btn-start-label');
+    const btnRestart = document.getElementById('btn-restart');
+    const btnReset = document.getElementById('btn-reset');
+    const btnToggleTime = document.getElementById('btn-toggle-time');
+    const textTimeToggle = document.getElementById('text-time-toggle');
+    const btnFullscreen = document.getElementById('btn-fullscreen');
+    const textFullscreen = document.getElementById('text-fullscreen');
+    
+    // 模式切換按鈕
+    const btnModeCountdown = document.getElementById('btn-mode-countdown');
+    const btnModeCountup = document.getElementById('btn-mode-countup');
+
+    // 時間輸入
+    const inputMinutes = document.getElementById('input-minutes');
+    const inputSeconds = document.getElementById('input-seconds');
+    const presetButtons = document.querySelectorAll('.preset-btn');
+
+    // 設定 Modal
+    const modalSettings = document.getElementById('settings-modal');
+    const btnOpenSettings = document.getElementById('btn-open-settings');
+    const btnCloseSettings = document.getElementById('btn-close-settings');
+    const btnSaveSettings = document.getElementById('btn-save-settings');
+    const optModeA = document.getElementById('opt-mode-a');
+    const optModeB = document.getElementById('opt-mode-b');
+
+    // 讀取本地儲存設定
+    function loadSettings() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const cfg = JSON.parse(saved);
+          if (cfg.durationSec) {
+            const m = Math.floor(cfg.durationSec / 60);
+            const s = cfg.durationSec % 60;
+            inputMinutes.value = m;
+            inputSeconds.value = s;
+            app.targetDurationMs = cfg.durationSec * 1000;
+          }
+          if (typeof cfg.showTimeNumber === 'boolean') {
+            app.showTimeNumber = cfg.showTimeNumber;
+          }
+          if (cfg.alertMode) {
+            app.alertMode = cfg.alertMode;
+          }
+          if (cfg.mode && (cfg.mode === TimerMode.COUNTDOWN || cfg.mode === TimerMode.COUNTUP)) {
+            app.mode = cfg.mode;
+          }
+        }
+      } catch (e) {
+        console.warn('讀取 LocalStorage 失敗，採用系統預設值', e);
+      }
+      applyLoadedSettingsToUI();
+    }
+
+    // 保存設定至本地
+    function saveSettings() {
+      try {
+        const cfg = {
+          durationSec: Math.floor(app.targetDurationMs / 1000),
+          showTimeNumber: app.showTimeNumber,
+          alertMode: app.alertMode,
+          mode: app.mode
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+      } catch (e) {
+        console.warn('寫入 LocalStorage 失敗', e);
+      }
+    }
+
+    // 將設定同步更新至 UI
+    function applyLoadedSettingsToUI() {
+      if (app.mode === TimerMode.COUNTDOWN) {
+        btnModeCountdown.classList.add('active');
+        btnModeCountup.classList.remove('active');
+      } else {
+        btnModeCountdown.classList.remove('active');
+        btnModeCountup.classList.add('active');
+      }
+
+      updateTimeVisibilityUI();
+
+      if (app.alertMode === 'auto-5') {
+        optModeA.checked = true;
+      } else {
+        optModeB.checked = true;
+      }
+
+      updateDisplay();
+    }
+
+    // 格式化毫米時間為 mm:ss
+    function formatTime(ms) {
+      const totalSec = Math.max(0, Math.ceil(ms / 1000));
+      const m = Math.floor(totalSec / 60);
+      const s = totalSec % 60;
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    // 取得自訂設定的時間長度 (毫秒)
+    function getCustomDurationMs() {
+      let m = parseInt(inputMinutes.value, 10);
+      let s = parseInt(inputSeconds.value, 10);
+      if (isNaN(m) || m < 0) m = 0;
+      if (isNaN(s) || s < 0) s = 0;
+      if (s > 59) s = 59;
+      // 最少設定 1 秒，避免 0 秒直接結束
+      let totalSec = (m * 60) + s;
+      if (totalSec <= 0) totalSec = 1;
+      return totalSec * 1000;
+    }
+
+    // 物理感沙漏 SVG 渲染邏輯
+    function renderHourglass(progressRatio) {
+      // progressRatio: 0.0 (剛開始) 到 1.0 (計時結束)
+      const clamped = Math.max(0, Math.min(1, progressRatio));
+
+      // 上半腔室高度範圍: y = 65 (滿) 到 y = 236 (空)，總高 171
+      const topMaxH = 171;
+      const topY = 65 + (clamped * topMaxH);
+      const topH = Math.max(0, topMaxH * (1 - clamped));
+      elTopSand.setAttribute('y', topY);
+      elTopSand.setAttribute('height', topH);
+
+      // 下半腔室高度範圍: y = 415 (底) 到 y = 244 (頂)，總高 171
+      const bottomMaxH = 171;
+      const bottomH = clamped * bottomMaxH;
+      const bottomY = 415 - bottomH;
+      elBottomSand.setAttribute('y', bottomY);
+      elBottomSand.setAttribute('height', bottomH);
+
+      // 下半部沙丘頂部錐形 (沙子落下形成的小山尖)
+      if (clamped > 0.02 && clamped < 0.98 && app.state === TimerState.RUNNING) {
+        const peakY = Math.max(244, bottomY - 10);
+        elSandMoundTip.setAttribute('points', `150,${peakY} 130,${bottomY + 5} 170,${bottomY + 5}`);
+        elSandMoundTip.style.opacity = '1';
+      } else {
+        elSandMoundTip.style.opacity = '0';
+      }
+
+      // 中央落沙細流
+      if (app.state === TimerState.RUNNING && clamped < 1.0) {
+        elSandStream.style.display = 'block';
+        elSandStream.classList.add('sand-stream-active');
+        elSandStream.setAttribute('y2', Math.min(415, bottomY + 4));
+      } else {
+        elSandStream.style.display = 'none';
+        elSandStream.classList.remove('sand-stream-active');
+      }
+    }
+
+    // 更新整體畫面顯示
+    function updateDisplay() {
+      let displayMs = 0;
+      let progress = 0;
+
+      if (app.mode === TimerMode.COUNTDOWN) {
+        const remaining = Math.max(0, app.targetDurationMs - app.elapsedMs);
+        displayMs = remaining;
+        progress = app.targetDurationMs > 0 ? (app.elapsedMs / app.targetDurationMs) : 0;
+      } else {
+        displayMs = app.elapsedMs;
+        progress = app.targetDurationMs > 0 ? (app.elapsedMs / app.targetDurationMs) : 0;
+      }
+
+      elTimerDisplay.textContent = formatTime(displayMs);
+      renderHourglass(progress);
+      updateButtonsUI();
+    }
+
+    // 更新各按鈕外觀狀態
+    function updateButtonsUI() {
+      if (app.state === TimerState.RUNNING) {
+        btnStartLabel.textContent = '暫停';
+        btnStart.className = 'btn btn-secondary';
+        btnRestart.disabled = false;
+        btnReset.disabled = false;
+        disableTimeInputs(true);
+      } else if (app.state === TimerState.PAUSED) {
+        btnStartLabel.textContent = '繼續';
+        btnStart.className = 'btn btn-primary';
+        btnRestart.disabled = false;
+        btnReset.disabled = false;
+        disableTimeInputs(true);
+      } else if (app.state === TimerState.FINISHED) {
+        btnStartLabel.textContent = '開始計時';
+        btnStart.className = 'btn btn-primary';
+        btnRestart.disabled = false;
+        btnReset.disabled = false;
+        disableTimeInputs(false);
+      } else {
+        // IDLE
+        btnStartLabel.textContent = '開始計時';
+        btnStart.className = 'btn btn-primary';
+        btnRestart.disabled = true;
+        btnReset.disabled = true;
+        disableTimeInputs(false);
+      }
+    }
+
+    function disableTimeInputs(disabled) {
+      inputMinutes.disabled = disabled;
+      inputSeconds.disabled = disabled;
+      presetButtons.forEach(btn => btn.disabled = disabled);
+      btnModeCountdown.disabled = disabled;
+      btnModeCountup.disabled = disabled;
+    }
+
+    // 準確時間循環 (requestAnimationFrame + delta 避免分頁休眠累積誤差)
+    function timerLoop(now) {
+      if (app.state !== TimerState.RUNNING) return;
+
+      if (!app.lastTimestamp) {
+        app.lastTimestamp = now;
+      }
+      const delta = now - app.lastTimestamp;
+      app.lastTimestamp = now;
+
+      app.elapsedMs += delta;
+
+      // 檢查是否到達時間
+      if (app.elapsedMs >= app.targetDurationMs) {
+        app.elapsedMs = app.targetDurationMs;
+        triggerTimeReached();
+        return;
+      }
+
+      updateDisplay();
+      app.rafId = requestAnimationFrame(timerLoop);
+    }
+
+    // 時間到達觸發邏輯（完全靜音，四周線條閃爍）
+    function triggerTimeReached() {
+      app.state = TimerState.FINISHED;
+      if (app.rafId) {
+        cancelAnimationFrame(app.rafId);
+        app.rafId = null;
+      }
+
+      updateDisplay();
+
+      // 啟動螢幕四周閃爍動畫
+      elBorderAlert.classList.add('flashing');
+
+      // 顯示「確認完成」浮動按鈕
+      elFinishBtn.style.display = 'block';
+
+      // 根據提醒設定決定是否自動停止
+      clearTimeout(app.autoStopAlertTimeoutId);
+      if (app.alertMode === 'auto-5') {
+        app.autoStopAlertTimeoutId = setTimeout(() => {
+          stopAlert();
+        }, 5000);
+      }
+    }
+
+    // 關閉閃爍提醒
+    function stopAlert() {
+      elBorderAlert.classList.remove('flashing');
+      elFinishBtn.style.display = 'none';
+      clearTimeout(app.autoStopAlertTimeoutId);
+    }
+
+    // 開始 / 暫停 / 繼續
+    function handleStartToggle() {
+      if (app.state === TimerState.FINISHED) {
+        stopAlert();
+      }
+
+      if (app.state === TimerState.IDLE) {
+        app.targetDurationMs = getCustomDurationMs();
+        app.elapsedMs = 0;
+        app.state = TimerState.RUNNING;
+        app.lastTimestamp = performance.now();
+        saveSettings();
+        app.rafId = requestAnimationFrame(timerLoop);
+      } else if (app.state === TimerState.RUNNING) {
+        app.state = TimerState.PAUSED;
+        if (app.rafId) cancelAnimationFrame(app.rafId);
+      } else if (app.state === TimerState.PAUSED) {
+        app.state = TimerState.RUNNING;
+        app.lastTimestamp = performance.now();
+        app.rafId = requestAnimationFrame(timerLoop);
+      } else if (app.state === TimerState.FINISHED) {
+        app.targetDurationMs = getCustomDurationMs();
+        app.elapsedMs = 0;
+        app.state = TimerState.RUNNING;
+        app.lastTimestamp = performance.now();
+        app.rafId = requestAnimationFrame(timerLoop);
+      }
+      updateDisplay();
+    }
+
+    // 重新開始
+    function handleRestart() {
+      stopAlert();
+      if (app.rafId) cancelAnimationFrame(app.rafId);
+      app.targetDurationMs = getCustomDurationMs();
+      app.elapsedMs = 0;
+      app.state = TimerState.RUNNING;
+      app.lastTimestamp = performance.now();
+      app.rafId = requestAnimationFrame(timerLoop);
+      updateDisplay();
+    }
+
+    // 重設
+    function handleReset() {
+      stopAlert();
+      if (app.rafId) cancelAnimationFrame(app.rafId);
+      app.state = TimerState.IDLE;
+      app.elapsedMs = 0;
+      app.targetDurationMs = getCustomDurationMs();
+      updateDisplay();
+    }
+
+    // 全螢幕沉浸控制
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {
+          console.warn('全螢幕請求被阻止:', err);
+        });
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    }
+
+    function onFullscreenChange() {
+      const isFull = !!document.fullscreenElement;
+      if (isFull) {
+        textFullscreen.textContent = '退出全螢幕';
+        startImmersiveIdleTimer();
+      } else {
+        textFullscreen.textContent = '全螢幕投影';
+        document.body.classList.remove('immersive-mode', 'show-controls');
+        clearTimeout(app.hideControlsTimer);
+      }
+    }
+
+    // 全螢幕時若滑鼠閒置超過 3 秒，隱藏頂部與底部控制面板，聚焦沙漏
+    function resetImmersiveIdleTimer() {
+      if (!document.fullscreenElement) return;
+
+      document.body.classList.remove('immersive-mode');
+      document.body.classList.add('show-controls');
+      clearTimeout(app.hideControlsTimer);
+
+      if (app.state === TimerState.RUNNING) {
+        app.hideControlsTimer = setTimeout(() => {
+          if (document.fullscreenElement && app.state === TimerState.RUNNING) {
+            document.body.classList.add('immersive-mode');
+            document.body.classList.remove('show-controls');
+          }
+        }, 3000);
+      }
+    }
+
+    function startImmersiveIdleTimer() {
+      resetImmersiveIdleTimer();
+    }
+
+    // 切換顯示/隱藏數字時間
+    function toggleTimeVisibility() {
+      app.showTimeNumber = !app.showTimeNumber;
+      updateTimeVisibilityUI();
+      saveSettings();
+    }
+
+    function updateTimeVisibilityUI() {
+      if (app.showTimeNumber) {
+        elTimerDisplay.classList.remove('hidden-time');
+        textTimeToggle.textContent = '數字：顯示';
+      } else {
+        elTimerDisplay.classList.add('hidden-time');
+        textTimeToggle.textContent = '數字：隱藏';
+      }
+    }
+
+    // 模式切換 (倒數 vs 正數)
+    function switchMode(newMode) {
+      if (app.state === TimerState.RUNNING) return;
+      app.mode = newMode;
+      handleReset();
+      applyLoadedSettingsToUI();
+      saveSettings();
+    }
+
+    // 設定自訂時間快捷鈕
+    function handlePresetClick(seconds) {
+      if (app.state === TimerState.RUNNING) return;
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      inputMinutes.value = m;
+      inputSeconds.value = s;
+      app.targetDurationMs = seconds * 1000;
+      app.elapsedMs = 0;
+      saveSettings();
+      updateDisplay();
+    }
+
+    // 事件監聽綁定
+    btnStart.addEventListener('click', handleStartToggle);
+    btnRestart.addEventListener('click', handleRestart);
+    btnReset.addEventListener('click', handleReset);
+    btnToggleTime.addEventListener('click', toggleTimeVisibility);
+    btnFullscreen.addEventListener('click', toggleFullscreen);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+
+    // 完成按鈕點擊關閉提醒
+    elFinishBtn.addEventListener('click', () => {
+      stopAlert();
+      handleReset();
+    });
+
+    // 點擊閃爍中的螢幕四周亦可解除提醒
+    elBorderAlert.addEventListener('click', () => {
+      stopAlert();
+    });
+
+    // 模式切換按鈕
+    btnModeCountdown.addEventListener('click', () => switchMode(TimerMode.COUNTDOWN));
+    btnModeCountup.addEventListener('click', () => switchMode(TimerMode.COUNTUP));
+
+    // 快捷時間按鈕
+    presetButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const sec = parseInt(btn.getAttribute('data-sec'), 10);
+        handlePresetClick(sec);
+      });
+    });
+
+    // 輸入框數值變動
+    function handleTimeInputChange() {
+      if (app.state === TimerState.RUNNING) return;
+      app.targetDurationMs = getCustomDurationMs();
+      app.elapsedMs = 0;
+      saveSettings();
+      updateDisplay();
+    }
+    inputMinutes.addEventListener('change', handleTimeInputChange);
+    inputSeconds.addEventListener('change', handleTimeInputChange);
+
+    // 全螢幕滑鼠移動喚醒控制列
+    window.addEventListener('mousemove', resetImmersiveIdleTimer);
+    window.addEventListener('touchstart', resetImmersiveIdleTimer, { passive: true });
+    window.addEventListener('keydown', (e) => {
+      resetImmersiveIdleTimer();
+      // 空白鍵快捷鍵控制計時
+      if (e.code === 'Space' && e.target.tagName !== 'INPUT') {
+        e.preventDefault();
+        handleStartToggle();
+      }
+    });
+
+    // 設定 Modal 相關事件
+    btnOpenSettings.addEventListener('click', () => {
+      modalSettings.classList.add('open');
+    });
+
+    btnCloseSettings.addEventListener('click', () => {
+      modalSettings.classList.remove('open');
+    });
+
+    btnSaveSettings.addEventListener('click', () => {
+      const selected = document.querySelector('input[name="alert-duration-mode"]:checked');
+      if (selected) {
+        app.alertMode = selected.value;
+        saveSettings();
+      }
+      modalSettings.classList.remove('open');
+    });
+
+    modalSettings.addEventListener('click', (e) => {
+      if (e.target === modalSettings) {
+        modalSettings.classList.remove('open');
+      }
+    });
+
+    // 初始化載入
+    window.addEventListener('DOMContentLoaded', () => {
+      loadSettings();
+      updateDisplay();
+    });
+  </script>
+</body>
+</html>
