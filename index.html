@@ -423,6 +423,8 @@
       background: #1e293b;
       border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 16px;
+      max-height: calc(100dvh - 32px);
+      overflow-y: auto;
       max-width: 440px;
       width: 100%;
       padding: 24px;
@@ -483,7 +485,7 @@
       cursor: pointer;
     }
 
-    /* 四周線條閃爍提醒 (完全靜音) */
+    /* 四周線條閃爍提醒 (可選提示音) */
     #screen-border-alert {
       position: fixed;
       inset: 0;
@@ -794,7 +796,7 @@
       </div>
 
       <div class="setting-item">
-        <span class="setting-label">時間到達時的閃爍提醒方式（全程靜音）：</span>
+        <span class="setting-label">時間到達時的閃爍提醒方式：</span>
         <div class="radio-group">
           <label class="radio-label">
             <input type="radio" name="alert-duration-mode" value="auto-5" id="opt-mode-a">
@@ -807,6 +809,19 @@
         </div>
       </div>
 
+      <div class="setting-item">
+        <label class="setting-label" for="sound-mode">時間到達時的聲音：</label>
+        <select id="sound-mode" class="radio-label" style="width:100%;color:var(--text-main);background:#0f172a">
+          <option value="silent">靜音（只有邊框閃爍）</option>
+          <option value="soft">柔和提示音（約 2 秒，只播放一次）</option>
+        </select>
+      </div>
+      <div class="setting-item">
+        <label class="setting-label" for="sound-volume">提示音音量：<span id="sound-volume-label">30%</span></label>
+        <input id="sound-volume" type="range" min="5" max="70" value="30" style="width:100%">
+        <button id="btn-preview-sound" type="button" class="icon-btn" style="margin-top:8px">♫ 試聽柔和提示音</button>
+        <p id="sound-status" role="status" style="font-size:0.85rem;color:var(--text-muted);margin-top:8px">提示音會柔和淡入、淡出。</p>
+      </div>
       <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
         <button type="button" class="btn btn-primary" id="btn-save-settings">確定</button>
       </div>
@@ -815,7 +830,7 @@
 
   <script>
     /* ============================================================
-       教室用電子沙漏計時器 - 核心腳本 (準確無音效高辨識度架構)
+       教室用電子沙漏計時器 - 核心腳本 (可選柔和提示音架構)
        ============================================================ */
 
     // 狀態定義
@@ -839,12 +854,14 @@
       state: TimerState.IDLE,
       mode: TimerMode.COUNTDOWN,
       showTimeNumber: true,
+      soundMode: 'silent',
+      soundVolume: 30,
       alertMode: 'until-click', // 'auto-5' 或 'until-click'
-      
+
       // 時間數值（以毫秒 ms 為基準，精準度高）
       targetDurationMs: 180 * 1000, // 預設 3 分鐘
       elapsedMs: 0,
-      
+
       // 高精準定時核心變數
       startTime: 0,
       lastTimestamp: 0,
@@ -861,7 +878,7 @@
     const elFinishBtn = document.getElementById('finish-overlay-btn');
     const elTimerDisplay = document.getElementById('main-timer-text');
     const elControlSidebar = document.getElementById('control-sidebar');
-    
+
     // 沙漏 SVG 元件
     const elTopSand = document.getElementById('top-sand-rect');
     const elBottomSand = document.getElementById('bottom-sand-rect');
@@ -877,7 +894,7 @@
     const textTimeToggle = document.getElementById('text-time-toggle');
     const btnFullscreen = document.getElementById('btn-fullscreen');
     const textFullscreen = document.getElementById('text-fullscreen');
-    
+
     // 模式切換按鈕
     const btnModeCountdown = document.getElementById('btn-mode-countdown');
     const btnModeCountup = document.getElementById('btn-mode-countup');
@@ -895,6 +912,69 @@
     const optModeA = document.getElementById('opt-mode-a');
     const optModeB = document.getElementById('opt-mode-b');
 
+    const soundModeInput = document.getElementById('sound-mode');
+    const soundVolumeInput = document.getElementById('sound-volume');
+    const soundVolumeLabel = document.getElementById('sound-volume-label');
+    const soundStatus = document.getElementById('sound-status');
+    let audioContext = null;
+    let activeSound = null;
+    let soundGeneration = 0;
+
+    // 在使用者操作時解鎖音訊，讓倒數結束後可以播放。
+    async function prepareAudio() {
+      try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) throw new Error('此瀏覽器不支援音訊');
+        if (!audioContext || audioContext.state === 'closed') audioContext = new AudioContextClass();
+        if (audioContext.state === 'suspended') await audioContext.resume();
+        return audioContext.state === 'running';
+      } catch (error) {
+        soundStatus.textContent = '目前無法播放提示音，請確認瀏覽器與裝置的音量設定。';
+        return false;
+      }
+    }
+
+    function stopSound() {
+      soundGeneration++;
+      if (!activeSound) return;
+      activeSound.oscillators.forEach(osc => { try { osc.stop(); } catch (_) {} osc.disconnect(); });
+      activeSound.gain.disconnect();
+      activeSound = null;
+    }
+
+    async function playSoftSound(volume) {
+      stopSound();
+      const generation = soundGeneration;
+      if (!await prepareAudio() || generation !== soundGeneration) return;
+      const start = audioContext.currentTime;
+      const end = start + 2;
+      const gain = audioContext.createGain();
+      const peak = Math.max(0.05, Math.min(0.7, volume / 100)) * 0.24;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(peak, start + 0.18);
+      gain.gain.setValueAtTime(peak, start + 0.45);
+      gain.gain.exponentialRampToValueAtTime(0.0001, end - 0.06);
+      gain.gain.linearRampToValueAtTime(0, end);
+      gain.connect(audioContext.destination);
+      const oscillators = [523.25, 659.25, 783.99].map(frequency => {
+        const osc = audioContext.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = frequency;
+        osc.connect(gain);
+        osc.start(start);
+        osc.stop(end);
+        return osc;
+      });
+      const sound = { gain, oscillators };
+      activeSound = sound;
+      oscillators[oscillators.length - 1].onended = () => {
+        oscillators.forEach(osc => osc.disconnect());
+        gain.disconnect();
+        if (activeSound === sound) activeSound = null;
+      };
+      soundStatus.textContent = '柔和提示音：約 2 秒，只播放一次。';
+    }
+
     // 讀取本地儲存設定
     function loadSettings() {
       try {
@@ -911,6 +991,8 @@
           if (typeof cfg.showTimeNumber === 'boolean') {
             app.showTimeNumber = cfg.showTimeNumber;
           }
+          if (['silent', 'soft'].includes(cfg.soundMode)) app.soundMode = cfg.soundMode;
+          if (Number.isFinite(cfg.soundVolume)) app.soundVolume = Math.max(5, Math.min(70, cfg.soundVolume));
           if (cfg.alertMode) {
             app.alertMode = cfg.alertMode;
           }
@@ -930,6 +1012,8 @@
         const cfg = {
           durationSec: Math.floor(app.targetDurationMs / 1000),
           showTimeNumber: app.showTimeNumber,
+          soundMode: app.soundMode,
+          soundVolume: app.soundVolume,
           alertMode: app.alertMode,
           mode: app.mode
         };
@@ -949,6 +1033,9 @@
         btnModeCountup.classList.add('active');
       }
 
+      soundModeInput.value = app.soundMode;
+      soundVolumeInput.value = app.soundVolume;
+      soundVolumeLabel.textContent = app.soundVolume + '%';
       updateTimeVisibilityUI();
 
       if (app.alertMode === 'auto-5') {
@@ -1100,9 +1187,11 @@
       app.rafId = requestAnimationFrame(timerLoop);
     }
 
-    // 時間到達觸發邏輯（完全靜音，四周線條閃爍）
+    // 時間到達觸發邏輯（可選提示音，四周線條閃爍）
     function triggerTimeReached() {
+      if (app.state === TimerState.FINISHED) return;
       app.state = TimerState.FINISHED;
+      if (app.soundMode === 'soft') void playSoftSound(app.soundVolume);
       if (app.rafId) {
         cancelAnimationFrame(app.rafId);
         app.rafId = null;
@@ -1127,6 +1216,7 @@
 
     // 關閉閃爍提醒
     function stopAlert() {
+      stopSound();
       elBorderAlert.classList.remove('flashing');
       elFinishBtn.style.display = 'none';
       clearTimeout(app.autoStopAlertTimeoutId);
@@ -1134,6 +1224,7 @@
 
     // 開始 / 暫停 / 繼續
     function handleStartToggle() {
+      if (app.soundMode === 'soft' && app.state !== TimerState.RUNNING) void prepareAudio();
       if (app.state === TimerState.FINISHED) {
         stopAlert();
       }
@@ -1164,6 +1255,7 @@
 
     // 重新開始
     function handleRestart() {
+      if (app.soundMode === 'soft') void prepareAudio();
       stopAlert();
       if (app.rafId) cancelAnimationFrame(app.rafId);
       app.targetDurationMs = getCustomDurationMs();
@@ -1318,7 +1410,7 @@
     window.addEventListener('keydown', (e) => {
       resetImmersiveIdleTimer();
       // 空白鍵快捷鍵控制計時
-      if (e.code === 'Space' && e.target.tagName !== 'INPUT') {
+      if (e.code === 'Space' && !modalSettings.classList.contains('open') && !['INPUT', 'SELECT', 'BUTTON', 'TEXTAREA'].includes(e.target.tagName)) {
         e.preventDefault();
         handleStartToggle();
       }
@@ -1326,6 +1418,9 @@
 
     // 設定 Modal 相關事件
     btnOpenSettings.addEventListener('click', () => {
+      soundModeInput.value = app.soundMode;
+      soundVolumeInput.value = app.soundVolume;
+      soundVolumeLabel.textContent = app.soundVolume + '%';
       modalSettings.classList.add('open');
     });
 
@@ -1334,6 +1429,10 @@
     });
 
     btnSaveSettings.addEventListener('click', () => {
+      app.soundMode = soundModeInput.value;
+      app.soundVolume = Number(soundVolumeInput.value);
+      if (app.soundMode === 'soft') void prepareAudio();
+      else stopSound();
       const selected = document.querySelector('input[name="alert-duration-mode"]:checked');
       if (selected) {
         app.alertMode = selected.value;
@@ -1346,6 +1445,13 @@
       if (e.target === modalSettings) {
         modalSettings.classList.remove('open');
       }
+    });
+
+    soundVolumeInput.addEventListener('input', () => {
+      soundVolumeLabel.textContent = soundVolumeInput.value + '%';
+    });
+    document.getElementById('btn-preview-sound').addEventListener('click', () => {
+      void playSoftSound(Number(soundVolumeInput.value));
     });
 
     // 初始化載入
